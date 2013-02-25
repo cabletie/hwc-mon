@@ -4,6 +4,8 @@ my $PortName = "/dev/ttyAMA0";
 my $Configuration_File_Name = ".hwc-config";
 my $PortObj; 
 
+print "inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
+
 	$PortObj = new Device::SerialPort ($PortName, 0)
 		|| die "Can't open $PortName: $!\n";
 
@@ -19,12 +21,14 @@ my $PortObj;
 
 	#$PortObj->save($Configuration_File_Name)
 		#|| warn "Can't save $Configuration_File_Name: $!\n";
-	$PortObj->purge_all;
 
-my $InBytes = 1;
-my $string_in = ' ';
-my $hex;
+
 while(1) {
+	my $InBytes = 1;
+	my $string_in = ' ';
+	my $hex;
+	$PortObj->purge_all;
+	while(1) {
 	(my $count_in, $string_in) = $PortObj->read($InBytes);
 	die "read unsuccessful (got $count_in bytes, expected $InBytes)\n" unless ($count_in == $InBytes);
 
@@ -49,11 +53,13 @@ $c = -50.49657516;
 $roof_raw = ($bytes[1] << 4) + $bytes[0];
 $tank_raw = ($bytes[3] << 4) + $bytes[2];
 $inlet_raw = ($bytes[5] << 4) + $bytes[4];
+$pump_raw = $bytes[6];
 $roof = ($roof_raw * $m) + $c;
 $inlet = ($inlet_raw * $m) + $c;
 $tank = ($tank_raw * $m) + $c;
-print "Inlet: $inlet_raw $inlet\n";
-print "Roof: $roof_raw $roof\n";
-print "Tank: $tank_raw $tank\n";
+$pump = ($pump_raw & 0x02) >> 1;
+printf("%0.2f,%0.2f,%0.2f,%d,%02x,%02x,%02x,%08b\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
+sleep(5);
+}
 
 $PortObj->close || warn "close failed";
