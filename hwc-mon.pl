@@ -4,12 +4,6 @@ my $PortName = "/dev/ttyAMA0";
 my $Configuration_File_Name = ".hwc-config";
 my $PortObj; 
 
-#if(-e $Configuration_File_Name) {
-#	print "Using existing config\n";
-#	$PortObj = start Device::SerialPort ($Configuration_File_Name)
-#		|| die "Can't start $Configuration_File_Name: $!\n";
-# } else {
-	print "creating new config\n";
 	$PortObj = new Device::SerialPort ($PortName, 0)
 		|| die "Can't open $PortName: $!\n";
 
@@ -18,38 +12,48 @@ my $PortObj;
 	$PortObj->databits(8);
 	$PortObj->stopbits(1);
 	$PortObj->handshake("none");
+	$PortObj->read_const_time(1000);  
+ #$PortObj->debug(0);
 
-	$PortObj->save($Configuration_File_Name)
-		|| warn "Can't save $Configuration_File_Name: $!\n";
-#}
+	$PortObj->write_settings;
 
-$PortObj = tie (*TTY, 'Device::SerialPort', "$Configuration_File_Name")
-              || die(RED,"Can't open $PortName: $^E\n",RESET);
-
-# print "Handshake opts:\n";
-# my @handshake_opts = $PortObj->handshake; 
-# print join(' ',@handshake_opts);
-# print "\n";
+	#$PortObj->save($Configuration_File_Name)
+		#|| warn "Can't save $Configuration_File_Name: $!\n";
+	$PortObj->purge_all;
 
 my $InBytes = 1;
 my $string_in = ' ';
+my $hex;
 while(1) {
-#	(my $count_in, $string_in) = $PortObj->read($InBytes);
-#	die "read unsuccessful (got $count_in bytes, expected $InBytes)\n" unless ($count_in == $InBytes);
+	(my $count_in, $string_in) = $PortObj->read($InBytes);
+	die "read unsuccessful (got $count_in bytes, expected $InBytes)\n" unless ($count_in == $InBytes);
 
-	$string_in = getc FH;
-	last if ($string_in == 0xf0);
-	printf("skipping: %x \n",$string_in);
+	$hex = unpack ('C',$string_in);
+	last if $hex == 0xf0;
 }
-	printf("moving on: %x ",$string_in);
-$InBytes = 7;
-while($string_in) {
+
+$InBytes = 1;
+for (0..6) {
 	(my $count_in, $string_in) = $PortObj->read($InBytes);
 	warn "read unsuccessful (got $count_in bytes, expected $InBytes)\n" unless ($count_in == $InBytes);
 
-	printf("%x ",$string_in);
+	($byte) = unpack ('C',$string_in);
+	$reg = ($byte & 0xf0) >> 4;
+	$val = ($byte & 0x0f);
+	$bytes[$reg] = $val;
+	#print "reg[$reg] = $val\n";
 }
 
-my $flowcontrol = $PortObj->handshake;
+$m = 1.011491061;
+$c = -50.49657516;
+$roof_raw = ($bytes[1] << 4) + $bytes[0];
+$tank_raw = ($bytes[3] << 4) + $bytes[2];
+$inlet_raw = ($bytes[5] << 4) + $bytes[4];
+$roof = ($roof_raw * $m) + $c;
+$inlet = ($inlet_raw * $m) + $c;
+$tank = ($tank_raw * $m) + $c;
+print "Inlet: $inlet_raw $inlet\n";
+print "Roof: $roof_raw $roof\n";
+print "Tank: $tank_raw $tank\n";
 
 $PortObj->close || warn "close failed";
