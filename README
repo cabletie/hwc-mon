@@ -1,0 +1,7 @@
+This tool collects data read from the serial port connected to
+a SolarStat-AAE evacuated tube solar hot water controller.
+
+I figgured out the serial out put reflected the temperature 
+readings and pump status in some way. 
+
+This tool munges the data and creates readable temperature data from it.
