@@ -1,10 +1,11 @@
 #!/usr/bin/perl
 use Device::SerialPort;
+use Time::Format qw(%time %strftime %manip);
 my $PortName = "/dev/ttyAMA0";
 my $Configuration_File_Name = ".hwc-config";
 my $PortObj; 
 
-print "inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
+print "timestamp,inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
 
 	$PortObj = new Device::SerialPort ($PortName, 0)
 		|| die "Can't open $PortName: $!\n";
@@ -51,6 +52,11 @@ while(1) {
 		#print "reg[$reg] = $val\n";
 	}
 
+# These are figures from qualitative measurements between
+# read and actual measurements
+# T = mX + c
+# X is register value read from serial port
+#
 	$m = 1.011491061;
 	$c = -50.49657516;
 	$roof_raw = ($bytes[1] << 4) + $bytes[0];
@@ -61,6 +67,9 @@ while(1) {
 	$inlet = ($inlet_raw * $m) + $c;
 	$tank = ($tank_raw * $m) + $c;
 	$pump = ($pump_raw & 0x02) >> 1;
+
+# Insert timestamp
+	print "$time{'yyyymmdd.hhmmss'},";
 	printf("%0.2f,%0.2f,%0.2f,%d,%02x,%02x,%02x,%08b\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
 	sleep(5);
 }
