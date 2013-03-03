@@ -1,11 +1,26 @@
 #!/usr/bin/perl
+use strict;
+use POSIX qw(setsid);
+#use Proc::Daemon;
+#use Proc::PID::File;
+#use LWP::Simple;
+
 use Device::SerialPort;
 use Time::Format qw(%time %strftime %manip);
+#use GetOpts::Long;
+
+# Clear output buffering
+$|=1;
+
+# Pop into the background
+&daemonize;
+
 my $PortName = "/dev/ttyAMA0";
 my $Configuration_File_Name = ".hwc-config";
 my $PortObj; 
+my $pidfile = "/var/run/hwc.pid";
 
-print "timestamp,inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
+#print "timestamp,inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
 
 	$PortObj = new Device::SerialPort ($PortName, 0)
 		|| die "Can't open $PortName: $!\n";
@@ -20,17 +35,22 @@ print "timestamp,inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
 
 	$PortObj->write_settings;
 
-	#$PortObj->save($Configuration_File_Name)
-		#|| warn "Can't save $Configuration_File_Name: $!\n";
+open(RRD,">>/home/peter/hwc/hwc.rrd") || die "Failed to open log file for appending: $!\n";;
 
+# Make RRD filehandle hot so output is not buffered.
+my $ofh = select RRD;
+	  $| = 1;
+	  select $ofh;
 
 # Loop forever
 while(1) {
 	my $InBytes = 1;
 	my $string_in = ' ';
 	my $hex;
+	my @bytes;
 	$PortObj->purge_all;
-# Loop until we find a 0xf0 frame flag
+
+	# Loop until we find a 0xf0 frame flag
 	while(1) {
 		(my $count_in, $string_in) = $PortObj->read($InBytes);
 		die "read unsuccessful (got $count_in bytes, expected $InBytes)\n" unless ($count_in == $InBytes);
@@ -45,9 +65,9 @@ while(1) {
 		(my $count_in, $string_in) = $PortObj->read($InBytes);
 		warn "read unsuccessful (got $count_in bytes, expected $InBytes)\n" unless ($count_in == $InBytes);
 
-		($byte) = unpack ('C',$string_in);
-		$reg = ($byte & 0xf0) >> 4;
-		$val = ($byte & 0x0f);
+		(my $byte) = unpack ('C',$string_in);
+		my $reg = ($byte & 0xf0) >> 4;
+		my $val = ($byte & 0x0f);
 		$bytes[$reg] = $val;
 		#print "reg[$reg] = $val\n";
 	}
@@ -57,21 +77,42 @@ while(1) {
 # T = mX + c
 # X is register value read from serial port
 #
-	$m = 1.011491061;
-	$c = -50.49657516;
-	$roof_raw = ($bytes[1] << 4) + $bytes[0];
-	$tank_raw = ($bytes[3] << 4) + $bytes[2];
-	$inlet_raw = ($bytes[5] << 4) + $bytes[4];
-	$pump_raw = $bytes[6];
-	$roof = ($roof_raw * $m) + $c;
-	$inlet = ($inlet_raw * $m) + $c;
-	$tank = ($tank_raw * $m) + $c;
-	$pump = ($pump_raw & 0x02) >> 1;
+	my $m = 1.011491061;
+	my $c = -50.49657516;
+	my $roof_raw = ($bytes[1] << 4) + $bytes[0];
+	my $tank_raw = ($bytes[3] << 4) + $bytes[2];
+	my $inlet_raw = ($bytes[5] << 4) + $bytes[4];
+	my $pump_raw = $bytes[6];
+	my $roof = ($roof_raw * $m) + $c;
+	my $inlet = ($inlet_raw * $m) + $c;
+	my $tank = ($tank_raw * $m) + $c;
+	my $pump = ($pump_raw & 0x02) >> 1;
 
 # Insert timestamp
-	print "$time{'yyyymmdd.hhmmss'},";
-	printf("%0.2f,%0.2f,%0.2f,%d,%02x,%02x,%02x,%08b\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
+print RRD time;
+#	print "$time{'yyyymmdd.hhmmss'},";
+	printf RRD (":%0.2f:%0.2f:%0.2f:%d:%02x:%02x:%02x:%d\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
+	#printf(:"%0.2f:%0.2f:%0.2f:%d:%02x:%02x:%02x:%08b\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
 	sleep(5);
 }
 
+close RRD;
 close TTY;
+
+# here is where we make ourself a daemon
+sub daemonize {
+	chdir '/' or die "Can’t chdir to /: $!";
+	open STDIN, '/dev/null' or die "Can’t read /dev/null: $!";
+	open STDOUT, '>>/dev/null' or die "Can’t write to /dev/null: $!";
+	open STDERR, '>>/dev/null' or die "Can’t write to /dev/null: $!";
+	defined(my $pid = fork) or die "Can’t fork: $!";
+	if($pid) {
+		open PID, ">$pidfile";
+		print PID $pid;
+		close PID;
+		exit;
+	}
+	setsid or die "Can’t start a new session: $!";
+	umask 0;
+}
+
