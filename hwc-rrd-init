@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+rrdtool create shw.rrd \
+#	--start `perl -e 'print time'` \
+	--start 1362180000 \
+	--step 5 \
+	DS:inlet:GAUGE:10:-10:100 \
+	DS:roof:GAUGE:10:-10:100 \
+	DS:tank:GAUGE:10:-10:100 \
+	DS:pump:GAUGE:10:0:1 \
+	RRA:AVERAGE:0.5:12:60 \
+	RRA:AVERAGE:0.5:60:576
