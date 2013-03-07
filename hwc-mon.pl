@@ -59,7 +59,7 @@ my $PortObj;
 
 	$PortObj->write_settings;
 
-open(RRD,">>/home/peter/hwc/hwc.rrd") || die "Failed to open log file for appending: $!\n";;
+open(RRD,">>/home/peter/hwc/hwc-raw.dat") || die "Failed to open log file for appending: $!\n";;
 
 # Make RRD filehandle hot so output is not buffered.
 $ofh = select RRD;
@@ -115,7 +115,7 @@ while($keep_going) {
 
 # Insert timestamp
 print RRD time;
-	printf RRD (":%0.2f:%0.2f:%0.2f:%d:%02x:%02x:%02x:%d\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
+	printf RRD (":%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
 	sleep(5);
 }
 

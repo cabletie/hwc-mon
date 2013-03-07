@@ -1,11 +1,21 @@
-#!/usr/bin/bash
-rrdtool create shw.rrd \
-#	--start `perl -e 'print time'` \
-	--start 1362180000 \
+#!/bin/bash
+LD_LIBRARY_PATH=/usr/local/lib
+rrdtool create hwc.rrd \
+	--start `perl -F/:/ -ane 'print eval($F[0]-10);last;' hwc-raw.dat` \
 	--step 5 \
 	DS:inlet:GAUGE:10:-10:100 \
 	DS:roof:GAUGE:10:-10:100 \
 	DS:tank:GAUGE:10:-10:100 \
 	DS:pump:GAUGE:10:0:1 \
-	RRA:AVERAGE:0.5:12:60 \
-	RRA:AVERAGE:0.5:60:576
+	DS:inlet_raw:GAUGE:10:0x00:0xff \
+	DS:roor_raw:GAUGE:10:0x00:0xff \
+	DS:tank_raw:GAUGE:10:0x00:0xff \
+	DS:flags:GAUGE:10:0x00:0xff \
+	RRA:AVERAGE:0.5:6:120 \
+	RRA:AVERAGE:0.5:60:210240
+
+#	RRA:AVERAGE:0.5:60:576 \
+#	RRA:AVERAGE:0.5:180:2976 \
+#	RRA:AVERAGE:0.5:720:17520
+
+#	--no-overwrite \
