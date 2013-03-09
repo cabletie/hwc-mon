@@ -3,16 +3,19 @@ use strict;
 use POSIX qw(setsid);
 use Proc::Daemon;
 #use Proc::PID::File;
-#use LWP::Simple;
 
 use Device::SerialPort;
 use Time::Format qw(%time %strftime %manip);
-#use GetOpts::Long;
+use Getopt::Long;
 
 MAIN:
 {
 
+my $keep_going = 1;
+my $reload = 0;
+
 # Dummy call of Time::Format to load perlonly code
+# Because Time::Format_XS has version campatibility problems
 my $dummy = $time{'Mon dd hh:mm:ss'};
 
 # Become a daemon
@@ -20,7 +23,7 @@ my $daemon_pid = Proc::Daemon::Init( {
 	pid_file => '/var/run/hwcd.pid',
 	child_STDERR => '+>>/var/log/hwc.error'}
 );
-#print $time{'Mon dd hh:mm:ss'}." Started hwc: $daemon_pid\n" if $daemon_pid;
+# Cue parent to quit
 exit if $daemon_pid;
 
 # Make STDERR filehandle hot so output is not buffered.
@@ -28,23 +31,26 @@ my $ofh = select STDERR;
 $| = 1;
 select $ofh;
 
-print STDERR $time{'Mon dd hh:mm:ss'}." Started hwc\n";
+print STDERR $time{'Mon dd hh:mm:ss'}." Loaded hwc\n";
 
 #
 # Setup signal handlers so that we have time to cleanup before shutting down
 #
-my $keep_going = 1;
-$SIG{HUP}  = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGHUP:  exiting gracefully\n"); $keep_going = 0; };
+$SIG{HUP}  = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGHUP:  reloading\n"); $keep_going = 0; $reload = 1};
 $SIG{INT}  = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGINT:  exiting gracefully\n"); $keep_going = 0; };
 $SIG{QUIT} = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGQUIT:  exiting gracefully\n"); $keep_going = 0; };
 $SIG{TERM} = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGTERM:  exiting gracefully\n"); $keep_going = 0; };
 
-# Do important daemony stuff
+do { #reload
+
+$keep_going = 1;
+$reload = 0;
+
+# Do important daemonic stuff
 my $PortName = "/dev/ttyAMA0";
 my $Configuration_File_Name = ".hwc-config";
 my $PortObj; 
 
-#print "timestamp,inlet,roof,tank,pump,inlet_raw,roof_raw,tank_raw,pump_raw\n";
 
 	$PortObj = new Device::SerialPort ($PortName, 0)
 		|| die "Can't open $PortName: $!\n";
@@ -55,16 +61,16 @@ my $PortObj;
 	$PortObj->stopbits(1);
 	$PortObj->handshake("none");
 	$PortObj->read_const_time(1000);  
- #$PortObj->debug(0);
 
 	$PortObj->write_settings;
 
-open(RRD,">>/home/peter/hwc/hwc-raw.dat") || die "Failed to open log file for appending: $!\n";;
+	open(RRD,">>/home/peter/hwc/hwc-raw.dat") || 
+		die "Failed to open log file for appending: $!\n";;
 
-# Make RRD filehandle hot so output is not buffered.
-$ofh = select RRD;
-$| = 1;
-select $ofh;
+	# Make RRD filehandle hot so output is not buffered.
+	$ofh = select RRD;
+	$| = 1;
+	select $ofh;
 
 # Loop forever
 while($keep_going) {
@@ -94,7 +100,6 @@ while($keep_going) {
 		my $reg = ($byte & 0xf0) >> 4;
 		my $val = ($byte & 0x0f);
 		$bytes[$reg] = $val;
-		#print "reg[$reg] = $val\n";
 	}
 
 # These are figures from qualitative measurements between
@@ -113,13 +118,20 @@ while($keep_going) {
 	my $tank = ($tank_raw * $m) + $c;
 	my $pump = ($pump_raw & 0x02) >> 1;
 
-# Insert timestamp
-print RRD time;
-	printf RRD (":%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x\n",$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$pump_raw);
+	# Insert timestamp
+	print RRD time;
+	printf RRD (":%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x\n",
+		$inlet,
+		$roof,
+		$tank,
+		$pump,
+		$inlet_raw,
+		$roof_raw,
+		$tank_raw,
+		$pump_raw);
 	sleep(5);
-}
-
+} #while keepgoing
 close RRD;
-close TTY;
+} while ($reload);
 
 }
