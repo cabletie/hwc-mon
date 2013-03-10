@@ -76,7 +76,7 @@ do_stop()
 	# that waits for the process to drop all resources that could be
 	# needed by services started subsequently.  A last resort is to
 	# sleep for some time.
-	start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --startas $DAEMON
+	start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --name $NAME --pidfile $PIDFILE --startas $DAEMON
 	[ "$?" = 2 ] && return 2
 	# Many daemons don't delete their pidfiles when they exit.
 	rm -f $PIDFILE
