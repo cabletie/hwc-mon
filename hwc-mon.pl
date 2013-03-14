@@ -35,17 +35,31 @@ use Time::Format qw(%time %strftime %manip);
 use Getopt::Long;
 use RRDs;
 
+sub generateUpdateString;
+
 ###############################
 # Config stuff
 ###############################
+
 # time in seconds between samples. Must match RRD setup.
 my $step = 5;
 my $pid_file = "/var/run/hwcd.pid";
 my $log_dir = "/var/log/hwc";
 my $log_file = "$log_dir/hwc.error";
 my $rrd_file = "/home/peter/hwc/hwc.rrd";
-#my $raw_file = "$log_dir/hwc_raw.log";
-my $raw_file = "/home/peter/hwc/hwc-raw.dat";
+my $raw_file_out = "/home/peter/hwc/hwc-raw.dat";
+my $raw_file_in = $raw_file_out;
+my $regenerate = 0; # Regenerate the raw file
+my $test_mode = 0;
+
+#
+# Get options
+#
+my $result = GetOptions (
+    "raw-in=s" => \$raw_file_in,
+    "regenerate" => \$regenerate,
+    "test-mode" => \$test_mode,
+);
 
 # Flow control flags
 my $keep_going = 1;
@@ -56,14 +70,15 @@ my $reload = 0;
 # And will throw an error if attempt is made to load after forking.
 my $dummy = $time{'Mon dd hh:mm:ss'};
 
-# Become a daemon
-my $daemon_pid = Proc::Daemon::Init( { 
-	pid_file => $pid_file,
-	child_STDERR => "+>>$log_file"}
-);
-# Cue parent to quit
-exit if $daemon_pid;
-
+# Become a daemon ifnot in test mode
+unless($test_mode) {
+    my $daemon_pid = Proc::Daemon::Init( {
+        pid_file => $pid_file,
+        child_STDERR => "+>>$log_file"}
+    );
+    # Cue parent to quit
+    exit if $daemon_pid;
+}
 # Make STDERR filehandle hot so output is not buffered.
 my $ofh = select STDERR;
 $| = 1;
@@ -81,12 +96,15 @@ $SIG{QUIT} = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGQUIT:  exit
 $SIG{TERM} = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGTERM:  exiting gracefully\n"); $keep_going = 0; };
 
 # Prepare raw input file ...
-(my $raw_open = open RAW,"<$raw_file") || warn "couldn't open raw data file ($raw_file) to process: $!\n";
+(my $raw_in_open = open RAW,"<$raw_file_in") || warn "couldn't open raw data file ($raw_file_in) to process: $!\n";
+(my $raw_out_open = open RAWOUT,">$raw_file_out") || warn "couldn't open raw data file ($raw_file_out) for writing: $!\n" if($regenerate);
 
+###############################################
 # Setup and load rrd file if it doesn't already exist
+###############################################
 unless( -e $rrd_file) {
     my $start_seconds = 0;
-    if($raw_open) {
+    if($raw_in_open) {
         # Grab first entry from raw log file
         my $line = <RAW>;
         if($line) {
@@ -105,34 +123,35 @@ unless( -e $rrd_file) {
         "DS:roof:GAUGE:10:-50:210",
         "DS:tank:GAUGE:10:-50:210",
         "DS:pump:GAUGE:10:0:1",
+        "DS:topout:GAUGE:10:0:1",
         "DS:inlet_raw:GAUGE:10:0x00:0xff",
         "DS:roof_raw:GAUGE:10:0x00:0xff",
         "DS:tank_raw:GAUGE:10:0x00:0xff",
         "DS:flags:GAUGE:10:0x00:0xff",
-        "RRA:AVERAGE:0.5:1:12614400",
+        "RRA:AVERAGE:0.5:3:12614400",
         "RRA:AVERAGE:0.5:6:120",
         "RRA:AVERAGE:0.5:60:210240");
     my $ERR = RRDs::error;
     die "\nFailed to create rrd file: $ERR" if($ERR);
     print STDERR "done\n";
-    #RRDs::update("$rrd_file", "N:u:u:u:u:u:u:u:u");
-    #    my $ERR = RRDs::error;
-    #    die "Failed to create rrd file: $ERR" if($ERR);
 }
 
+###############################################
+# Load rrd with existing data from raw log file
+###############################################
 # Grab last entry from rrd file
 my $last = RRDs::last ($rrd_file);
 my $ERR = RRDs::error;
 die "Failed to get last time from rrd file: $ERR" if($ERR);
+$last = 0 if $test_mode;
 
-if($raw_open) {
+if($raw_in_open) {
     # Now load in new stuff from log file if there is more recent stuff than the
     # latest entry in the RRD file
     # Also (somewhat hamfisted-ly) get last line of file
-    my $last_line = `tail -1 $raw_file`;
-#    print STDERR $last_line;
+    my $last_line = `tail -1 $raw_file_in`;
     (my $last_raw) = split(/:/,$last_line);
-    warn "last time from raw file: $last_raw\n";
+    warn "last time from raw in file: $last_raw\n";
     warn "last time from rrd file: $last\n";
     if($last_raw > $last) { # raw file ends after current rrd file
         my $this = 0;
@@ -143,9 +162,14 @@ if($raw_open) {
 
         while(<RAW>) {
 		chomp;
-            (my @F) = split(/:/);
+            my $update = $_;
+            # Create update string from data
+#            (my $t,my $inlet,my $roof,my $tank,my $pump,my $inlet_raw,my $roof_raw,my $tank_raw,my $status_raw) = split(/:/);
+            (my $t,my $dummy) = split(/:/,$update);
+            #print "$t $inlet $roof $tank $pump $inlet_raw $roof_raw $tank_raw $status_raw\n";
+            #(my @fields) = split(/:/);
             $prev=$this;
-            $this=$F[0];
+            $this=$t;
             if($this <= $last) {
                 if(! $said_skipping) {
                     print STDERR "skipping ...";
@@ -159,10 +183,20 @@ if($raw_open) {
             }
             if($this > $prev)
             {
-                RRDs::update ("$rrd_file","$_");
-                $ERR = RRDs::error;
-                warn "Failed to update to rrd file: $ERR" if($ERR);
-                print STDERR ("\r$line_count++") unless($line_count % 720);
+#                print ("Fields: ", join("+",@fields), "\n");
+
+                #    my $update = generateUpdateString($t,hex $inlet_raw,hex $roof_raw,hex $tank_raw,hex $status_raw);
+                # Write to new raw data file if selected
+                #print RAWOUT "$update\n" if($regenerate);
+                unless ($test_mode) {
+                    # Write to RRD file
+                    RRDs::update ("$rrd_file","$update");
+                    $ERR = RRDs::error;
+                    warn "Failed to update to rrd file: $ERR" if($ERR);
+                }
+                # Print a progress update
+                $line_count++;
+                print STDERR ("\r",$line_count) if(($line_count % 720)==0);
                 last unless($keep_going); # Escape clause to cancel processing mid-load
                 next;
             }
@@ -171,6 +205,7 @@ if($raw_open) {
         }
     }
 }
+close RAWOUT if($regenerate);
 
 # Main loop to be repeated when reload is requested via SIGHUP
 do { #reload - SIGHUP send us back here
@@ -197,8 +232,8 @@ do { #reload - SIGHUP send us back here
 
 	$PortObj->write_settings;
 
-	open(RRD,">>$raw_file") ||
-		die "Failed to open log file for appending: $!\n";;
+	open(RRD,">>$raw_file_out") ||
+		die "Failed to open raw output log file for appending: $!\n";;
 
 	# Make RRD filehandle hot so output is not buffered.
 	$ofh = select RRD;
@@ -248,8 +283,10 @@ do { #reload - SIGHUP send us back here
 		# T = mX + c
 		# X is register value read from serial port
 		#
-		my $m = 1.011491061;
-		my $c = -50.49657516;
+        #    my $m = 1.011491061;
+        #    my $c = -50.49657516;
+        my $m = 1.0;
+        my $c = -50.0;
 		# Roof high nibble is R1, low nibble is R0
 		my $roof_raw = ($bytes[1] << 4) + $bytes[0];
 		# Tank high nibble is R3, low nibble is R2
@@ -257,28 +294,34 @@ do { #reload - SIGHUP send us back here
 		# Inlet high nibble is R5, low nibble is R4
 		my $inlet_raw = ($bytes[5] << 4) + $bytes[4];
 		# Pump R6.1 (topout R6.0 and frost R6.?) flags in R6
-		my $pump_raw = $bytes[6];
-		my $roof = ($roof_raw * $m) + $c;
-		my $inlet = ($inlet_raw * $m) + $c;
-		my $tank = ($tank_raw * $m) + $c;
-		my $pump = ($pump_raw & 0x02) >> 1;
+		my $status_raw = $bytes[6];
 
 		# Insert timestamp
         my $t = time;
-		# Write data string
-		printf RRD ("%d:%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x\n",
-			$t,
-			$inlet,
-			$roof,
-			$tank,
-			$pump,
-			$inlet_raw,
-			$roof_raw,
-			$tank_raw,
-			$pump_raw);
-	my $rrd_data = sprintf("%d:%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x",
-                $t, $inlet, $roof, $tank, $pump, $inlet_raw, $roof_raw,
-                $tank_raw, $pump_raw);
+        my $rrd_data = generateUpdateString($t,$inlet_raw,$roof_raw,$tank_raw,$status_raw);
+#        if($regenerate) {
+            # Write new format data string
+            printf RRD "$rrd_data\n";
+#        } else {
+#            # Write old format data string
+#            my $roof = ($roof_raw * $m) + $c;
+#            my $inlet = ($inlet_raw * $m) + $c;
+#            my $tank = ($tank_raw * $m) + $c;
+#            my $pump = ($status_raw & 0x02) >> 1;
+#            printf RRD ("%d:%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x\n",
+#                $t,
+#                $inlet,
+#                $roof,
+#                $tank,
+#                $pump,
+#                $inlet_raw,
+#                $roof_raw,
+#                $tank_raw,
+#                $status_raw);
+#        }
+#	my $rrd_data = sprintf("%d:%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x",
+#                $t, $inlet, $roof, $tank, $pump, $inlet_raw, $roof_raw,
+#                $tank_raw, $status_raw);
 #print STDERR "rrd_data: $rrd_data\n";
         RRDs::update($rrd_file,$rrd_data);
 	$ERR = RRDs::error;
@@ -288,16 +331,53 @@ do { #reload - SIGHUP send us back here
 	close RRD;
 } while ($reload);
 warn "Exiting\n";
+
+# Takes time plus four raw fields and generates a full update string
+sub generateUpdateString
+{
+    # $time,$inlet,$roof,$tank,$pump,$inlet_raw,$roof_raw,$tank_raw,$status_raw
+    my $t = shift;
+    my $inlet_raw = shift;
+    my $roof_raw = shift;
+    my $tank_raw = shift;
+    my $status_raw = shift;
+    printf("Received: %d:0x%02x:0x%02x:0x%02x:0x%02x\n", $t, $inlet_raw, $roof_raw, $tank_raw, $status_raw) if $test_mode;
+    # These are figures from qualitative measurements between
+    # read and actual measurements
+    # I'm wondering if they should just be m=1, c=-50 ...
+    # T = mX + c
+    # X is register value read from serial port
+    #
+    #    my $m = 1.011491061;
+    #    my $c = -50.49657516;
+    my $m = 1.0;
+    my $c = -50.0;
+    my $roof = ($roof_raw * $m) + $c;
+    my $inlet = ($inlet_raw * $m) + $c;
+    my $tank = ($tank_raw * $m) + $c;
+    my $pump = ($status_raw & 0x02) >> 1;
+    my $topout = ($status_raw & 0x01);
+    
+    my $result = sprintf("%d:%0.2f:%0.2f:%0.2f:%d:%d:0x%02x:0x%02x:0x%02x:0x%02x",
+    $t, $inlet, $roof, $tank, $pump, $topout, $inlet_raw, $roof_raw,
+    $tank_raw, $status_raw);
+    print "Result: $result\n" if $test_mode;
+    return $result;
+}
+
 __END__
 
 =head1 NAME
 hwcd - SolarStat solar water heater controller monitor daemon
 
 =head1 SYNOPSIS
-sample [options] [file ...]
+hwcd [options]
  Options:
    -help            brief help message
    -man             full documentation
+   -raw-in=FILE     specify different input raw file
+   -test-mode       set test mode - no daemon
+   -regenerate      re-write raw file with input raw data
    
 =head1 OPTIONS
 =over 8
