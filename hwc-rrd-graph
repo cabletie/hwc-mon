@@ -74,3 +74,15 @@ rrdtool graph /var/www/hwc_longer.png \
 	LINE2:myroof#FF0000:"Roof" \
 	LINE2:myinlet#0000FF:"Inlet" \
 	LINE2:mytank#00FF00:"Tank"
+
+rrdtool graph /var/www/day_test.png \
+	--start -1day --end now \
+	--vertical-label DegC \
+	--title "Test - Last Day" \
+	DEF:myroof=test.rrd:roof:AVERAGE \
+	DEF:myinlet=test.rrd:inlet:AVERAGE \
+	DEF:mytank=test.rrd:tank:AVERAGE \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank"
+
