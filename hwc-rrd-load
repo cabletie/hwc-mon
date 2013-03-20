@@ -1,0 +1,24 @@
+#!/bin/bash
+
+export LD_LIBRARY_PATH=/usr/local/lib
+rrdtool create hwc.rrd \
+	--start `perl -F/:/ -ane 'print eval($F[0]-10);last;' $1` \
+	--step 5 \
+	DS:inlet:GAUGE:10:-10:100 \
+	DS:roof:GAUGE:10:-10:100 \
+	DS:tank:GAUGE:10:-10:100 \
+	DS:pump:GAUGE:10:0:1 \
+	DS:inlet_raw:GAUGE:10:0x00:0xff \
+	DS:roof_raw:GAUGE:10:0x00:0xff \
+	DS:tank_raw:GAUGE:10:0x00:0xff \
+	DS:flags:GAUGE:10:0x00:0xff \
+	RRA:AVERAGE:0.5:1:12614400 \
+	RRA:AVERAGE:0.5:6:120 \
+	RRA:AVERAGE:0.5:60:210240
+
+# 1 hour of 30s samples
+# 1 year of 5min samples
+
+# Load current raw data file after processing through de-reverse-time machine
+./hwck.pl --rrd=hwc.rrd --after=`rrdtool last hwc.rrd` --input=hwc-raw.dat
+#cat $1 | ./hwck.pl |xargs rrdtool update hwc.rrd

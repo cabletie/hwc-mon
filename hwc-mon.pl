@@ -1,4 +1,11 @@
 #!/usr/bin/perl
+#
+# ToDo
+#
+# 1. Move config stuff into proper config file, reloaded at reload time
+# 2. Add periodic graph creation
+# 3. Change to 15 seconds step
+# 4. 
 
 END {
     print "not ok 1 " unless $loaded;
@@ -128,9 +135,11 @@ unless( -e $rrd_file) {
         "DS:roof_raw:GAUGE:10:0x00:0xff",
         "DS:tank_raw:GAUGE:10:0x00:0xff",
         "DS:flags:GAUGE:10:0x00:0xff",
-        "RRA:AVERAGE:0.5:3:12614400",
+        "RRA:LAST:0.5:1:241920",
+        "RRA:AVERAGE:0.5:1:241920",
         "RRA:AVERAGE:0.5:6:120",
         "RRA:AVERAGE:0.5:60:210240");
+#    "RRA:AVERAGE:0.5:1:12614400",
     my $ERR = RRDs::error;
     die "\nFailed to create rrd file: $ERR" if($ERR);
     print STDERR "done\n";
@@ -163,11 +172,7 @@ if($raw_in_open) {
         while(<RAW>) {
 		chomp;
             my $update = $_;
-            # Create update string from data
-#            (my $t,my $inlet,my $roof,my $tank,my $pump,my $inlet_raw,my $roof_raw,my $tank_raw,my $status_raw) = split(/:/);
             (my $t,my $dummy) = split(/:/,$update);
-            #print "$t $inlet $roof $tank $pump $inlet_raw $roof_raw $tank_raw $status_raw\n";
-            #(my @fields) = split(/:/);
             $prev=$this;
             $this=$t;
             if($this <= $last) {
@@ -183,11 +188,6 @@ if($raw_in_open) {
             }
             if($this > $prev)
             {
-#                print ("Fields: ", join("+",@fields), "\n");
-
-                #    my $update = generateUpdateString($t,hex $inlet_raw,hex $roof_raw,hex $tank_raw,hex $status_raw);
-                # Write to new raw data file if selected
-                #print RAWOUT "$update\n" if($regenerate);
                 unless ($test_mode) {
                     # Write to RRD file
                     RRDs::update ("$rrd_file","$update");
@@ -299,30 +299,8 @@ do { #reload - SIGHUP send us back here
 		# Insert timestamp
         my $t = time;
         my $rrd_data = generateUpdateString($t,$inlet_raw,$roof_raw,$tank_raw,$status_raw);
-#        if($regenerate) {
-            # Write new format data string
-            printf RRD "$rrd_data\n";
-#        } else {
-#            # Write old format data string
-#            my $roof = ($roof_raw * $m) + $c;
-#            my $inlet = ($inlet_raw * $m) + $c;
-#            my $tank = ($tank_raw * $m) + $c;
-#            my $pump = ($status_raw & 0x02) >> 1;
-#            printf RRD ("%d:%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x\n",
-#                $t,
-#                $inlet,
-#                $roof,
-#                $tank,
-#                $pump,
-#                $inlet_raw,
-#                $roof_raw,
-#                $tank_raw,
-#                $status_raw);
-#        }
-#	my $rrd_data = sprintf("%d:%0.2f:%0.2f:%0.2f:%d:0x%02x:0x%02x:0x%02x:0x%02x",
-#                $t, $inlet, $roof, $tank, $pump, $inlet_raw, $roof_raw,
-#                $tank_raw, $status_raw);
-#print STDERR "rrd_data: $rrd_data\n";
+        # Write data string
+        printf RRD "$rrd_data\n";
         RRDs::update($rrd_file,$rrd_data);
 	$ERR = RRDs::error;
 	warn "Failed to update to rrd file: $ERR" if($ERR);

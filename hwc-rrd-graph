@@ -1,0 +1,76 @@
+#!/bin/bash
+rrdtool graph /var/www/hwc_pump.png \
+	--start 4pm --end start+1hour\
+	--vertical-label DegC \
+	--title "Pump" \
+	DEF:mypump=hwc.rrd:pump:LAST \
+	CDEF:scaledpump=mypump,100,* \
+DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	AREA:scaledpump#777777:"Pump" \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank" 
+
+rrdtool graph /var/www/hwc_hour.png \
+	--start -3hour --end now \
+	--vertical-label DegC \
+	--title "Last 3 Hours" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	DEF:mypump=hwc.rrd:pump:LAST \
+	CDEF:scaledpump=mypump,100,* \
+	VDEF:max=myroof,MAXIMUM \
+	VDEF:min=mytank,MINIMUM \
+	AREA:scaledpump#777777:"Pump" \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank" 
+
+#AREA:scaledpump#EEEEEE:"Pump" \
+
+rrdtool graph /var/www/hwc_midday.png \
+	--start 7 --end 20 \
+	--vertical-label DegC \
+	--title "Daylight" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank"
+
+rrdtool graph /var/www/hwc_day.png \
+	--start -1day --end now \
+	--vertical-label DegC \
+	--title "Last Day" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank"
+
+rrdtool graph /var/www/hwc_week.png \
+	--start -5days  --end now \
+	--vertical-label DegC \
+	--title "Last Week" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank"
+
+rrdtool graph /var/www/hwc_longer.png \
+	--start -10days  --end now \
+	--vertical-label DegC \
+	--title "Last 10 days" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank"

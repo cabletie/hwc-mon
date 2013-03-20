@@ -1,0 +1,3 @@
+#!/usr/bin/perl
+use Time::Format qw(%time %strftime %manip);
+print $time{'yyyy/mm/dd hh:mm:ss',$ARGV[0]},"\n";
