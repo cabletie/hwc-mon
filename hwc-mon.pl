@@ -49,7 +49,7 @@ sub generateUpdateString;
 ###############################
 
 # time in seconds between samples. Must match RRD setup.
-my $step = 5;
+my $step = 15;
 my $pid_file = "/var/run/hwcd.pid";
 my $log_dir = "/var/log/hwc";
 my $log_file = "$log_dir/hwc.error";
@@ -58,6 +58,8 @@ my $raw_file_out = "/home/peter/hwc/hwc-raw.dat";
 my $raw_file_in = $raw_file_out;
 my $regenerate = 0; # Regenerate the raw file
 my $test_mode = 0;
+my $log_only = 0;
+my $do_process = 1;
 
 #
 # Get options
@@ -65,8 +67,11 @@ my $test_mode = 0;
 my $result = GetOptions (
     "raw-in=s" => \$raw_file_in,
     "regenerate" => \$regenerate,
-    "test-mode" => \$test_mode,
-);
+    "no-daemon" => \$test_mode,
+    "log-only" => \$log_only,
+    "rrd=s" => \$rrd_file,
+    "process!" => \$do_process,
+    );
 
 # Flow control flags
 my $keep_going = 1;
@@ -77,7 +82,7 @@ my $reload = 0;
 # And will throw an error if attempt is made to load after forking.
 my $dummy = $time{'Mon dd hh:mm:ss'};
 
-# Become a daemon ifnot in test mode
+# Become a daemon if not in test mode
 unless($test_mode) {
     my $daemon_pid = Proc::Daemon::Init( {
         pid_file => $pid_file,
@@ -106,10 +111,12 @@ $SIG{TERM} = sub { print(STDERR $time{'Mon dd hh:mm:ss'}." Caught SIGTERM:  exit
 (my $raw_in_open = open RAW,"<$raw_file_in") || warn "couldn't open raw data file ($raw_file_in) to process: $!\n";
 (my $raw_out_open = open RAWOUT,">$raw_file_out") || warn "couldn't open raw data file ($raw_file_out) for writing: $!\n" if($regenerate);
 
-###############################################
+#####################################################
 # Setup and load rrd file if it doesn't already exist
-###############################################
-unless( -e $rrd_file) {
+# and we're not in log-only mode
+#####################################################
+
+unless( -e $rrd_file || $log_only) {
     my $start_seconds = 0;
     if($raw_in_open) {
         # Grab first entry from raw log file
@@ -126,25 +133,30 @@ unless( -e $rrd_file) {
     RRDs::create("$rrd_file",
         "--start=$start_seconds",
         "--step=$step",
-        "DS:inlet:GAUGE:10:-50:210",
-        "DS:roof:GAUGE:10:-50:210",
-        "DS:tank:GAUGE:10:-50:210",
-        "DS:pump:GAUGE:10:0:1",
-        "DS:topout:GAUGE:10:0:1",
+        "DS:inlet:GAUGE:30:-50:210",
+        "DS:roof:GAUGE:30:-50:210",
+        "DS:tank:GAUGE:30:-50:210",
+        "DS:pump:GAUGE:30:0:1",
+        "DS:topout:GAUGE:30:0:1",
         "DS:inlet_raw:GAUGE:10:0x00:0xff",
         "DS:roof_raw:GAUGE:10:0x00:0xff",
         "DS:tank_raw:GAUGE:10:0x00:0xff",
         "DS:flags:GAUGE:10:0x00:0xff",
-        "RRA:LAST:0.5:1:241920",
-        "RRA:AVERAGE:0.5:1:241920",
-        "RRA:AVERAGE:0.5:6:120",
-        "RRA:AVERAGE:0.5:60:210240");
+        "RRA:AVERAGE:0.5:1:80640",
+        "RRA:MIN:0.5:1:80640",
+        "RRA:MAX:0.5:1:80640",
+        "RRA:AVERAGE:0.5:20:8064",
+        "RRA:MIN:0.5:20:8064",
+        "RRA:MAX:0.5:20:8064",
+        "RRA:AVERAGE:0.5:60:70080",
+        "RRA:MIN:0.5:60:70080",
+        "RRA:MAX:0.5:60:70080",
+    );
 #    "RRA:AVERAGE:0.5:1:12614400",
     my $ERR = RRDs::error;
     die "\nFailed to create rrd file: $ERR" if($ERR);
     print STDERR "done\n";
 }
-
 ###############################################
 # Load rrd with existing data from raw log file
 ###############################################
@@ -162,6 +174,7 @@ if($raw_in_open) {
     (my $last_raw) = split(/:/,$last_line);
     warn "last time from raw in file: $last_raw\n";
     warn "last time from rrd file: $last\n";
+    warn "processing existing log file\n";
     if($last_raw > $last) { # raw file ends after current rrd file
         my $this = 0;
         my $prev;
@@ -204,9 +217,11 @@ if($raw_in_open) {
             $this = $prev;
         }
     }
+    warn "Done processing existing log file\n";
 }
 close RAWOUT if($regenerate);
 
+if($do_process) {
 # Main loop to be repeated when reload is requested via SIGHUP
 do { #reload - SIGHUP send us back here
 
@@ -308,6 +323,7 @@ do { #reload - SIGHUP send us back here
 	} #while keepgoing
 	close RRD;
 } while ($reload);
+}
 warn "Exiting\n";
 
 # Takes time plus four raw fields and generates a full update string
@@ -354,7 +370,7 @@ hwcd [options]
    -help            brief help message
    -man             full documentation
    -raw-in=FILE     specify different input raw file
-   -test-mode       set test mode - no daemon
+   -no-daemon       set test mode - no daemon
    -regenerate      re-write raw file with input raw data
    
 =head1 OPTIONS

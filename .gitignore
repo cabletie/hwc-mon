@@ -7,6 +7,8 @@
 
 *.bckup
 
+*.gz
+
 hwc.rrd.original_raw_data
 
 hwc.rrd.20130317.2138.save

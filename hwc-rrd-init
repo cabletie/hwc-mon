@@ -1,21 +1,62 @@
 #!/bin/bash
+END {
+    print "not ok 1 " unless $loaded;
+    unlink "demo.rrd";
+}
+
+sub ok
+{
+    my($what, $result) = @_ ;
+    $ok_count++;
+    print "not " unless $result;
+    print "ok $ok_count $what ";
+}
+
+#makes programm work AFTER install
+use lib qw( /usr/local/lib/perl );
+
+use strict;
+use vars qw(@ISA $loaded);
+
+use RRDs;
+$loaded = 1;
+my $ok_count = 1;
+
+ok("loading",1);
+
+######### End of RRDp black magic
+use strict;
+use POSIX qw(setsid);
+use Proc::Daemon;
+
+use Device::SerialPort;
+use Time::Format qw(%time %strftime %manip);
+use Getopt::Long;
+use RRDs;
+
+sub generateUpdateString;
 LD_LIBRARY_PATH=/usr/local/lib
-rrdtool create hwc.rrd \
-	--start `perl -F/:/ -ane 'print eval($F[0]-10);last;' hwc-raw.dat` \
-	--step 5 \
-	DS:inlet:GAUGE:10:-10:100 \
-	DS:roof:GAUGE:10:-10:100 \
-	DS:tank:GAUGE:10:-10:100 \
-	DS:pump:GAUGE:10:0:1 \
-	DS:inlet_raw:GAUGE:10:0x00:0xff \
-	DS:roof_raw:GAUGE:10:0x00:0xff \
-	DS:tank_raw:GAUGE:10:0x00:0xff \
-	DS:flags:GAUGE:10:0x00:0xff \
-	RRA:AVERAGE:0.5:6:120 \
-	RRA:AVERAGE:0.5:60:210240
+# Create RRD file
+RRDs::create("$rrd_file",
+"--start=$start_seconds",
+"--step=$step",
+"--no-overwrite",
+"DS:inlet:GAUGE:30:-50:210",
+"DS:roof:GAUGE:30:-50:210",
+"DS:tank:GAUGE:30:-50:210",
+"DS:pump:GAUGE:30:0:1",
+"DS:topout:GAUGE:30:0:1",
+"RRA:AVERAGE:0.5:1:80640",
+"RRA:MIN:0.5:1:80640",
+"RRA:MAX:0.5:1:80640",
+"RRA:AVERAGE:0.5:20:8064",
+"RRA:MIN:0.5:20:8064",
+"RRA:MAX:0.5:20:8064",
+"RRA:AVERAGE:0.5:60:70080",
+"RRA:MIN:0.5:60:70080",
+"RRA:MAX:0.5:60:70080",
+);
+my $ERR = RRDs::error;
+die "\nFailed to create rrd file: $ERR" if($ERR);
+print STDERR "done\n";
 
-#	RRA:AVERAGE:0.5:60:576 \
-#	RRA:AVERAGE:0.5:180:2976 \
-#	RRA:AVERAGE:0.5:720:17520
-
-#	--no-overwrite \
