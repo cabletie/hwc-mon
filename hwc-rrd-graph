@@ -1,26 +1,59 @@
 #!/bin/bash
+echo "#0 Data\n"
+rrdtool graph /var/www/hwc_data.png \
+	--start 12am --end now \
+	--title "Stats" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
+	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
+	DEF:mytank=hwc.rrd:tank:AVERAGE \
+	DEF:mypump=hwc.rrd:pump:MAX \
+	VDEF:roofnow=myroof,LAST \
+	VDEF:inletnow=myinlet,LAST \
+	VDEF:tanknow=mytank,LAST \
+	VDEF:roofmax=myroof,MAXIMUM\
+	VDEF:inletmax=myinlet,MAXIMUM\
+	VDEF:tankmax=mytank,MAXIMUM\
+	VDEF:roofmin=myroof,MINIMUM\
+	VDEF:inletmin=myinlet,MINIMUM\
+	VDEF:tankmin=mytank,MINIMUM \
+	LINE2:myroof#FF0000:"Roof" \
+	LINE2:myinlet#0000FF:"Inlet" \
+	LINE2:mytank#00FF00:"Tank" \
+	GPRINT:roofnow:"Current Roof Temp %2.0lf C" \
+	GPRINT:inletnow:"Current Inlet Temp %2.0lf C" \
+	GPRINT:tanknow:"Current Tank Temp %2.0lf C" \
+	GPRINT:roofmin:"Min Roof Temp %2.0lf C" \
+	GPRINT:inletmin:"Min Inlet Temp %2.0lf C" \
+	GPRINT:tankmin:"Min Tank Temp %2.0lf C" \
+	GPRINT:roofmax:"Max Roof Temp %2.0lf C" \
+	GPRINT:inletmax:"Max Inlet Temp %2.0lf C" \
+	GPRINT:tankmax:"Max Tank Temp %2.0lf C" \
+	
+
+echo  "#1 hwc_pump.png\n"
 rrdtool graph /var/www/hwc_pump.png \
 	--start 4pm --end start+1hour\
 	--vertical-label DegC \
-	--title "Pump" \
-	DEF:mypump=hwc.rrd:pump:LAST \
-	CDEF:scaledpump=mypump,100,* \
-DEF:myroof=hwc.rrd:roof:AVERAGE \
+	--title "#1 Pump 4pm-5pm" \
+	DEF:myroof=hwc.rrd:roof:AVERAGE \
 	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
 	DEF:mytank=hwc.rrd:tank:AVERAGE \
-	AREA:scaledpump#777777:"Pump" \
+	DEF:mypump=hwc.rrd:pump:MAX \
+	CDEF:scaledpump=mypump,100,* \
+	AREA:scaledpump#999999:"Pump" \
 	LINE2:myroof#FF0000:"Roof" \
 	LINE2:myinlet#0000FF:"Inlet" \
 	LINE2:mytank#00FF00:"Tank" 
 
+echo  "#2 hwc_hour.png\n"
 rrdtool graph /var/www/hwc_hour.png \
 	--start -3hour --end now \
 	--vertical-label DegC \
-	--title "Last 3 Hours" \
+	--title "#2 Last 3 Hours" \
 	DEF:myroof=hwc.rrd:roof:AVERAGE \
 	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
 	DEF:mytank=hwc.rrd:tank:AVERAGE \
-	DEF:mypump=hwc.rrd:pump:LAST \
+	DEF:mypump=hwc.rrd:pump:MAX \
 	CDEF:scaledpump=mypump,100,* \
 	VDEF:max=myroof,MAXIMUM \
 	VDEF:min=mytank,MINIMUM \
@@ -31,10 +64,11 @@ rrdtool graph /var/www/hwc_hour.png \
 
 #AREA:scaledpump#EEEEEE:"Pump" \
 
+echo  "#3 hwc_midday.png\n";
 rrdtool graph /var/www/hwc_midday.png \
 	--start 7 --end 20 \
 	--vertical-label DegC \
-	--title "Daylight" \
+	--title "#3 Daylight" \
 	DEF:myroof=hwc.rrd:roof:AVERAGE \
 	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
 	DEF:mytank=hwc.rrd:tank:AVERAGE \
@@ -42,10 +76,11 @@ rrdtool graph /var/www/hwc_midday.png \
 	LINE2:myinlet#0000FF:"Inlet" \
 	LINE2:mytank#00FF00:"Tank"
 
+echo  "#4 hwc_midday.png\n";
 rrdtool graph /var/www/hwc_day.png \
 	--start -1day --end now \
 	--vertical-label DegC \
-	--title "Last Day" \
+	--title "#4 Last Day" \
 	DEF:myroof=hwc.rrd:roof:AVERAGE \
 	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
 	DEF:mytank=hwc.rrd:tank:AVERAGE \
@@ -53,10 +88,11 @@ rrdtool graph /var/www/hwc_day.png \
 	LINE2:myinlet#0000FF:"Inlet" \
 	LINE2:mytank#00FF00:"Tank"
 
+echo  "#5 hwc_week.png\n";
 rrdtool graph /var/www/hwc_week.png \
 	--start -5days  --end now \
 	--vertical-label DegC \
-	--title "Last Week" \
+	--title "#5 Last Week" \
 	DEF:myroof=hwc.rrd:roof:AVERAGE \
 	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
 	DEF:mytank=hwc.rrd:tank:AVERAGE \
@@ -64,10 +100,11 @@ rrdtool graph /var/www/hwc_week.png \
 	LINE2:myinlet#0000FF:"Inlet" \
 	LINE2:mytank#00FF00:"Tank"
 
+echo  "#6 hwc_longer.png\n";
 rrdtool graph /var/www/hwc_longer.png \
 	--start -10days  --end now \
 	--vertical-label DegC \
-	--title "Last 10 days" \
+	--title "#6 Last 10 days" \
 	DEF:myroof=hwc.rrd:roof:AVERAGE \
 	DEF:myinlet=hwc.rrd:inlet:AVERAGE \
 	DEF:mytank=hwc.rrd:tank:AVERAGE \
@@ -75,14 +112,15 @@ rrdtool graph /var/www/hwc_longer.png \
 	LINE2:myinlet#0000FF:"Inlet" \
 	LINE2:mytank#00FF00:"Tank"
 
-rrdtool graph /var/www/day_test.png \
-	--start -1day --end now \
-	--vertical-label DegC \
-	--title "Test - Last Day" \
-	DEF:myroof=test.rrd:roof:AVERAGE \
-	DEF:myinlet=test.rrd:inlet:AVERAGE \
-	DEF:mytank=test.rrd:tank:AVERAGE \
-	LINE2:myroof#FF0000:"Roof" \
-	LINE2:myinlet#0000FF:"Inlet" \
-	LINE2:mytank#00FF00:"Tank"
-
+#echo  "#7 day_test.png (from test.rrd)\n";
+#rrdtool graph /var/www/day_test.png \
+#	--start -1day --end now \
+#	--vertical-label DegC \
+#	--title "#7 Test - Last Day (from test.rrd)" \
+#	DEF:myroof=test.rrd:roof:AVERAGE \
+#	DEF:myinlet=test.rrd:inlet:AVERAGE \
+#	DEF:mytank=test.rrd:tank:AVERAGE \
+#	LINE2:myroof#FF0000:"Roof" \
+#	LINE2:myinlet#0000FF:"Inlet" \
+#	LINE2:mytank#00FF00:"Tank"
+#
