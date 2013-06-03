@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "#0 Data\n"
+echo "\#0 Data\n"
 rrdtool graph /var/www/hwc_data.png \
 	--start 12am --end now \
 	--title "Stats" \
@@ -10,11 +10,11 @@ rrdtool graph /var/www/hwc_data.png \
 	VDEF:roofnow=myroof,LAST \
 	VDEF:inletnow=myinlet,LAST \
 	VDEF:tanknow=mytank,LAST \
-	VDEF:roofmax=myroof,MAXIMUM\
-	VDEF:inletmax=myinlet,MAXIMUM\
-	VDEF:tankmax=mytank,MAXIMUM\
-	VDEF:roofmin=myroof,MINIMUM\
-	VDEF:inletmin=myinlet,MINIMUM\
+	VDEF:roofmax=myroof,MAXIMUM \
+	VDEF:inletmax=myinlet,MAXIMUM \
+	VDEF:tankmax=mytank,MAXIMUM \
+	VDEF:roofmin=myroof,MINIMUM \
+	VDEF:inletmin=myinlet,MINIMUM \
 	VDEF:tankmin=mytank,MINIMUM \
 	LINE2:myroof#FF0000:"Roof" \
 	LINE2:myinlet#0000FF:"Inlet" \

@@ -8,7 +8,7 @@
 # 4. 
 
 END {
-    print "not ok 1 " unless $loaded;
+    print "RRDp loaded" unless $loaded;
     unlink "demo.rrd";
 }
 
