@@ -183,7 +183,12 @@ if($raw_in_open) {
         my $line_count = 0;
 
         while(<RAW>) {
-		chomp;
+	    chomp;
+            unless (/^\d{1,10}(:-*[\d\.]*){5}(:[\dxa-fA-F]+){4}$/)
+	    {
+		print STDERR "\nskipping bad data at line $line_count: $_\n";
+                next;
+            } 
             my $update = $_;
             (my $t,my $dummy) = split(/:/,$update);
             $prev=$this;

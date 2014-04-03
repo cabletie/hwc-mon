@@ -24,3 +24,4 @@ hwc-raw.dat.old
 hwc-raw.dat_bad_copy
 
 hwc.csv
+*.old
